@@ -21,6 +21,7 @@ local returnning_time = 8 -- change
 
 local magnet = Gpio.new(Gpio.C, 3, Gpio.OUTPUT)
 local drop_height = 1.2 -- change
+local current_z = 2 -- change
 
 action = {
     ["TAKEOFF"] = function(x)
@@ -53,9 +54,14 @@ action = {
 
     ["DOWN_CLOSER"] = function(x)
         ap.goToLocalPoint(current_position["x"], current_position["y"],
-                          drop_height)
+                          current_z)
 
-        state = "DROP_PAYLOAD"
+        if (current_z <= drop_height) then
+            state = "DROP_PAYLOAD"
+        else
+            current_z = current_z - 0.3 -- change
+            state = "DOWN_CLOSER"
+        end
     end,
 
     ["DROP_PAYLOAD"] = function(x)
@@ -93,10 +99,8 @@ action = {
     end
 }
 
-
 -----------
 --- Ignore
-
 
 function callback(event)
     if (event == Ev.POINT_REACHED) then action[state]() end
