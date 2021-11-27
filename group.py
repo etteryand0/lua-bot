@@ -32,38 +32,39 @@ current_corner = 1
 corners = {
     # [x, y]
     # относительно места взлёта
-    1: {"x": 0, "y": -41},
-    2: {"x": 0, "y": 41},
-    3: {"x": -104, "y": 41},
-    4: {"x": -104, "y": -41},
+    # They're 100% wrong so debug first position please
+    1: {"x": -41, "y": 0},
+    2: {"x": 41, "y": 0},
+    3: {"x": 41, "y": -104},
+    4: {"x": -41, "y": -104},
 }
 
 
 #!! MAIN LOOP
 
 def do_formation(pt: PositionTarget, drone_id: int, dt: float) -> str or None:
-    print("Formation completed")
     return "go_next_corner"
 
 
 def prepare_for_loop(pt: PositionTarget, drone_id: int, dt: float) -> str or None:
-    distance = corners[2]
+    distance = corners[2]["x"]
     estimated_arrival = distance / speed
 
     set_vel(pt, 0, speed, 0)
 
-    if estimated_arrival > dt:
+    if estimated_arrival < dt:
         drone_pos = data[drone_id]["local_position/pose"].pose.position
         z = drone_pos.z if drone_id <= 6 else drone_pos.z + 2
         set_vel(pt, 0, 0, 0)
-        set_pos(pt, drone_pos.x, corners[2], z)
+        set_pos(pt, drone_pos.x, corners[2]["x"], z)
 
         return "do_formation"
 
 
 def go_next_corner(pt: PositionTarget, drone_id: int, dt: float) -> str or None:
+    global current_corner
     next_corner = current_corner + 1 if current_corner != 4 else 1
-    axis = "y" if next_corner == 2 or next_corner == 4 else "x"
+    axis = "x" if next_corner == 2 or next_corner == 4 else "y"
 
     corner_pos = corners[current_corner]
     next_corner_pos = corners[next_corner]
@@ -79,7 +80,8 @@ def go_next_corner(pt: PositionTarget, drone_id: int, dt: float) -> str or None:
     if estimated_arrival < dt:
         drone_pos = data[drone_id]["local_position/pose"].pose.position
         set_vel(pt, 0, 0, 0)
-        current_corner = next_corner
+        if drone_id == instances_num:
+            current_corner = next_corner
         if axis == "y":
             set_pos(pt, drone_pos.x, next_corner_pos["y"], drone_pos.z)
         else:
@@ -89,7 +91,7 @@ def go_next_corner(pt: PositionTarget, drone_id: int, dt: float) -> str or None:
 
 
 def offboard_loop():
-    global action_state, current_corner
+    global action_state
     pub_pt = {}
     # создаем топики, для публикации управляющих значений
     for n in range(1, instances_num + 1):
@@ -106,6 +108,8 @@ def offboard_loop():
 
     # цикл управления
     rate = rospy.Rate(freq)
+    print(
+        f"\x1b[31m Default Local Position of first copter {data[1]['local_position/pose'].pose.position} \x1b[0m")
     while not rospy.is_shutdown():
         dt = time.time() - ts  # time since change of action state
 
@@ -120,6 +124,10 @@ def offboard_loop():
             # safety to ensure that every drone made its last action
             if _failsafe_state != action_state:
                 action_state = _failsafe_state
+                print(
+                    f"State changed from {action_state} to {_failsafe_state}")
+                # Maybe could sleep here
+                # time.sleep(3)
                 ts = time.time()
 
         rate.sleep()
