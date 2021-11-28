@@ -56,7 +56,7 @@ def prepare_for_loop(pt: PositionTarget, drone_id: int, dt: float) -> str or Non
         drone_pos = data[drone_id]["local_position/pose"].pose.position
         z = drone_pos.z if drone_id <= 6 else drone_pos.z + 2
         set_vel(pt, 0, 0, 0)
-        set_pos(pt, drone_pos.x, corners[2]["x"], z)
+        set_pos(pt, corners[2]["x"], drone_pos.y, z)
 
         return "do_formation"
 
@@ -70,8 +70,9 @@ def go_next_corner(pt: PositionTarget, drone_id: int, dt: float) -> str or None:
     next_corner_pos = corners[next_corner]
 
     distance = next_corner_pos[axis] - corner_pos[axis]
-    estimated_arrival = distance / speed
+    estimated_arrival = abs(distance / speed)
     velocity = speed if distance >= 0 else -speed
+    print(f"{next_corner=}, {axis=}, {distance=}, {estimated_arrival=}, {velocity=}")
 
     if axis == "y":
         set_vel(pt, 0, velocity, 0)
@@ -83,12 +84,10 @@ def go_next_corner(pt: PositionTarget, drone_id: int, dt: float) -> str or None:
         set_vel(pt, 0, 0, 0)
         if drone_id == instances_num:
             current_corner = next_corner
-        if axis == "y":
-            set_pos(pt, drone_pos.x, next_corner_pos["y"], drone_pos.z)
-        else:
+        if axis == "x":
             set_pos(pt, next_corner_pos["x"], drone_pos.y, drone_pos.z)
 
-        return "go_next_corner" if current_corner == 3 or current_corner == 1 else "do_formation"
+        return "do_formation"
 
 
 def offboard_loop():
@@ -199,7 +198,7 @@ def service_proxy(n, path, arg_type, *args, **kwds):
     service = rospy.ServiceProxy(f"/mavros{n}/{path}", arg_type)
     ret = service(*args, **kwds)
 
-    rospy.loginfo(f"{n}: {path} {args}, {kwds} => {ret}")
+    # rospy.loginfo(f"{n}: {path} {args}, {kwds} => {ret}")
     return ret
 
 
