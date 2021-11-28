@@ -19,6 +19,7 @@ node_name = "offboard_node"
 speed = 5
 
 action_state = "takeoff"
+formation_number = 0 # 0-3: C S P A
 data = {}
 lz = {}
 
@@ -39,11 +40,44 @@ corners = {
     4: {"x": -35, "y": 72},
 }
 
+formations = {
+    0: [
+        { "x": 0, "y": 0, "z": 16 },
+        { "x": 0, "y": -1, "z": 4 },
+        { "x": 0, "y": -0.5, "z": 6.5 },
+        { "x": 0, "y": -0.5, "z": 18.5 },
+        { "x": 0, "y": 1, "z": 4 },
+        { "x": 0, "y": 0, "z": 16 }, # 6
+        { "x": 2, "y": 0, "z": 13 },
+        { "x": 2, "y": -1, "z": 1 },
+        { "x": 2, "y": 0.5, "z": 3.5 },
+        { "x": 2, "y": -0.5, "z": 15.5 },
+        { "x": 2, "y": 1, "z": 1 },
+        { "x": 2, "y": 0, "z": 13 },
+    ]
+}
+
 
 #!! MAIN LOOP
 
 def do_formation(pt: PositionTarget, drone_id: int, dt: float) -> str or None:
+    global current_corner, formation_number
+
+    if current_corner == 1 or current_corner == 3:
+        return "go_next_corner"
+
+    drone_pos = data[drone_id]["local_position/pose"].pose.position
+    next_pos = formations[formation_number][drone_id-1]
+
+    set_pos(
+        pt,
+        drone_pos.x + next_pos["x"],
+        drone_pos.y + next_pos["y"],
+        drone_pos.z + next_pos["z"]
+    )
+
     return "go_next_corner"
+    
 
 
 def prepare_for_loop(pt: PositionTarget, drone_id: int, dt: float) -> str or None:
@@ -54,9 +88,12 @@ def prepare_for_loop(pt: PositionTarget, drone_id: int, dt: float) -> str or Non
 
     if estimated_arrival < dt:
         drone_pos = data[drone_id]["local_position/pose"].pose.position
-        z = drone_pos.z if drone_id <= 6 else drone_pos.z + 2
         set_vel(pt, 0, 0, 0)
-        set_pos(pt, corners[2]["x"], drone_pos.y, z)
+        # Get in there Lewis
+        if drone_id <= 6:
+            set_pos(pt, corners[2]["x"], drone_pos.y, drone_pos.z)
+        else:
+            set_pos(pt, corners[2]["x"]-2, drone_pos.y, drone_pos.z)
 
         return "do_formation"
 
@@ -72,7 +109,6 @@ def go_next_corner(pt: PositionTarget, drone_id: int, dt: float) -> str or None:
     distance = next_corner_pos[axis] - corner_pos[axis]
     estimated_arrival = abs(distance / speed)
     velocity = speed if distance >= 0 else -speed
-    print(f"{next_corner=}, {axis=}, {distance=}, {estimated_arrival=}, {velocity=}")
 
     if axis == "y":
         set_vel(pt, 0, velocity, 0)
@@ -130,7 +166,10 @@ def offboard_loop():
                     print(f"Current corner - {current_corner}")
                 action_state = _failsafe_state
                 # Maybe could sleep here
-                time.sleep(3)
+                if action_state == "do_formation":
+                    time.sleep(10)
+                else:
+                    time.sleep(3)
                 ts = time.time()
 
         rate.sleep()
