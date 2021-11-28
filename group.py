@@ -22,7 +22,7 @@ action_state = "takeoff"
 data = {}
 lz = {}
 
-current_corner = 1
+current_corner = 2
 # ==================== corners
 # 3 ________________ 2
 # =                  =
@@ -33,10 +33,10 @@ corners = {
     # [x, y]
     # относительно места взлёта
     # They're 100% wrong so debug first position please
-    1: {"x": -41, "y": 0},
-    2: {"x": 41, "y": 0},
-    3: {"x": 41, "y": -104},
-    4: {"x": -41, "y": -104},
+    1: {"x": -35, "y": -72},
+    2: {"x": 35, "y": -72},
+    3: {"x": 35, "y": 72},
+    4: {"x": -35, "y": 72},
 }
 
 
@@ -50,7 +50,7 @@ def prepare_for_loop(pt: PositionTarget, drone_id: int, dt: float) -> str or Non
     distance = corners[2]["x"]
     estimated_arrival = distance / speed
 
-    set_vel(pt, 0, speed, 0)
+    set_vel(pt, speed, 0, 0)
 
     if estimated_arrival < dt:
         drone_pos = data[drone_id]["local_position/pose"].pose.position
@@ -69,13 +69,14 @@ def go_next_corner(pt: PositionTarget, drone_id: int, dt: float) -> str or None:
     corner_pos = corners[current_corner]
     next_corner_pos = corners[next_corner]
 
-    if axis == "y":
-        set_vel(pt, 0, speed, 0)
-    else:
-        set_vel(pt, speed, 0, 0)
-
     distance = next_corner_pos[axis] - corner_pos[axis]
     estimated_arrival = distance / speed
+    velocity = speed if distance >= 0 else -speed
+
+    if axis == "y":
+        set_vel(pt, 0, velocity, 0)
+    else:
+        set_vel(pt, velocity, 0, 0)
 
     if estimated_arrival < dt:
         drone_pos = data[drone_id]["local_position/pose"].pose.position
@@ -110,6 +111,7 @@ def offboard_loop():
     rate = rospy.Rate(freq)
     print(
         f"\x1b[31m Default Local Position of first copter {data[1]['local_position/pose'].pose.position} \x1b[0m")
+    # print(adgsdf)
     while not rospy.is_shutdown():
         dt = time.time() - ts  # time since change of action state
 
@@ -123,11 +125,13 @@ def offboard_loop():
         else:
             # safety to ensure that every drone made its last action
             if _failsafe_state != action_state:
-                action_state = _failsafe_state
                 print(
                     f"State changed from {action_state} to {_failsafe_state}")
+                if _failsafe_state == "go_next_corner":
+                    print(f"Current corner - {current_corner}")
+                action_state = _failsafe_state
                 # Maybe could sleep here
-                # time.sleep(3)
+                time.sleep(3)
                 ts = time.time()
 
         rate.sleep()
